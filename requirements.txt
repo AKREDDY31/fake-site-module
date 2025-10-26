@@ -7,4 +7,5 @@ validators
 phonenumbers
 scikit-learn
 python-whois
-python-magic-bin
+python-magic
+
