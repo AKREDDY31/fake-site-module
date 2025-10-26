@@ -53,6 +53,34 @@ st.markdown("""
 
 /* Tabs */
 div[role="tablist"] > div { background: #fff !important; }
+
+/* Sidebar Quick Tips */
+.quickbox {
+  background: linear-gradient(90deg,#f8fafc 60%, #e9ecf7 100%);
+  border-left: 4px solid #3aadcc;
+  box-shadow: 0 2px 10px #d8dbeb44;
+  border-radius: 10px;
+  padding: 18px 14px 16px 18px;
+  margin-top: 20px;
+  margin-bottom: 24px;
+}
+.quickbox-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #27aebc;
+  margin-bottom: 9px;
+  letter-spacing: 0.02em;
+}
+.quickbox-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 15.2px;
+  color: #335076;
+}
+.quickbox-list li {
+  margin-bottom: 8px;
+  line-height: 1.53em;
+}
 </style>
 <div class="app-header">
   <div class="title">🛡️ Job Scam Detector</div>
@@ -96,7 +124,6 @@ def extract_text_from_url(url: str, headers=None) -> Tuple[str, BeautifulSoup]:
         r.raise_for_status()
         content = r.text
         soup = BeautifulSoup(content, "html.parser")
-        # Remove scripts/styles
         for s in soup(["script", "style", "noscript", "svg"]):
             s.decompose()
         visible_text = soup.get_text(separator="\n")
@@ -156,7 +183,6 @@ def score_text_and_url(text: str, url: str=None, soup: BeautifulSoup=None) -> Di
 
     text_lower = text.lower()
 
-    # --- 1: Suspicious
     s_count = 0
     for phrase in SUSPICIOUS_PHRASES:
         if phrase in text_lower:
@@ -218,7 +244,6 @@ def score_text_and_url(text: str, url: str=None, soup: BeautifulSoup=None) -> Di
     else:
         negatives.append("No phone number found in text.")
 
-    # --- 2: URL
     if url:
         if validators.url(url):
             parsed = tldextract.extract(url)
@@ -321,13 +346,16 @@ def score_text_and_url(text: str, url: str=None, soup: BeautifulSoup=None) -> Di
 st.sidebar.markdown("## 🔎 Input method")
 input_mode = st.sidebar.radio("Choose input type", ("Upload PDF", "Paste Text", "URL"))
 
-st.sidebar.markdown("---")
-st.sidebar.markdown("## ℹ️ Quick tips")
 st.sidebar.markdown("""
-- Upload job listing PDF or paste the job text.  
-- For URLs, provide the full URL (https://...).  
-- The detector uses a explainable rule-based system (not a black-box ML model) so you see exactly why a result is flagged.
-""")
+<div class='quickbox'>
+  <div class='quickbox-title'>ℹ️ Quick Tips</div>
+  <ul class='quickbox-list'>
+    <li>Upload job listing PDF or paste the job text.</li>
+    <li>For URLs, provide the full URL (<span style='color:#2985ca;font-weight:500'>https://...</span>).</li>
+    <li>The detector uses an <b>explainable rule-based system</b> (not an opaque ML model), so you see <b>exactly why a result is flagged</b>.</li>
+  </ul>
+</div>
+""", unsafe_allow_html=True)
 
 tab1, tab2, tab3, tab4 = st.tabs(["Analyze", "Raw Output", "Highlights", "About"])
 
@@ -453,4 +481,3 @@ try:
         st.session_state["last_result"] = result
 except Exception:
     pass
-
