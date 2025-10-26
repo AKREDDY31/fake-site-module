@@ -333,7 +333,7 @@ tab1, tab2, tab3, tab4 = st.tabs(["Analyze", "Raw Output", "Highlights", "About"
 
 with tab1:
     st.markdown("<div class='card'>", unsafe_allow_html=True)
-    st.markdown("### Provide job listing (PDF / Text / URL)")
+    st.markdown("### Provide job listing")
     st.write("")  # spacing
 
     extracted_text = ""
@@ -453,3 +453,4 @@ try:
         st.session_state["last_result"] = result
 except Exception:
     pass
+
