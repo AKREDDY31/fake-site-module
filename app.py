@@ -1,11 +1,3 @@
-"""
-app.py - Job Scam Detector (Streamlit)
-Single-file app: accepts PDF / plain text / URL, analyses content & URL,
-and produces an explainable verdict (score, positives/negatives, highlights).
-
-Based on the SRS uploaded by the user (Job Scam Detector module). Reference included.
-"""
-
 import streamlit as st
 from typing import Tuple, Dict, List
 import requests, io, re, math, time
@@ -26,27 +18,41 @@ except Exception:
 st.set_page_config(page_title="Job Scam Detector", layout="wide", page_icon="🛡️")
 st.markdown("""
 <style>
-/* Container */
-.app-header { padding: 18px 26px; border-radius: 12px; background: linear-gradient(90deg,#0f172a,#0b1220); color: #fff; box-shadow: 0 6px 24px rgba(2,6,23,0.5); }
+.app-header { 
+  padding: 18px 26px; 
+  border-radius: 12px; 
+  background: #fff;
+  color: #232b3b; 
+  box-shadow: 0 2px 10px rgba(30,30,30,0.08); 
+}
 .title { font-size:28px; font-weight:700; letter-spacing:0.4px; margin-bottom:6px; }
-.subtitle { color: #9aa7bf; margin-top:0; margin-bottom:6px; }
+.subtitle { color: #6b7689; margin-top:0; margin-bottom:6px; }
 
 /* Buttons & inputs */
-.stButton>button { background: linear-gradient(90deg,#06b6d4,#7c3aed); color: white; padding:10px 18px; border-radius: 10px; border: none; font-weight:600; }
+.stButton>button { background: #06b6d4; color: white; padding:10px 18px; border-radius: 10px; border: none; font-weight:600; }
+.stButton>button:hover { background: #0d7fab; }
 .stFileUploader > div { background: #fff; border-radius: 10px; padding: 8px; }
-.big-mono { font-family: monospace; display:block; padding:10px; background:#0b1220; color:#cbd5e1; border-radius:8px; }
+.big-mono { font-family: monospace; display:block; padding:10px; background:#f4f5f9; color:#334; border-radius:8px; }
 
 /* Cards */
-.card { background: linear-gradient(180deg,#0b1220,#071024); padding:16px; border-radius:12px; color:#e6eef8; box-shadow: 0 6px 18px rgba(0,0,0,0.4); }
-.bad { color:#ffb4b4; font-weight:600; }
-.good { color:#b7f5c9; font-weight:600; }
-.small { font-size:13px; color:#9aa7bf; }
-.kv { font-weight:700; color:#dbeafe; }
+.card { background: #fff; 
+  padding:16px; 
+  border-radius:12px; 
+  color:#232b3b; 
+  box-shadow: 0 2px 10px rgba(30,30,30,0.09); 
+}
+.bad { color:#ff6565; font-weight:600; }
+.good { color:#32ab76; font-weight:600; }
+.small { font-size:13px; color:#5e6d87; }
+.kv { font-weight:700; color:#31386a; }
 
 /* results */
-.pos { color:#86efac; font-weight:600; }
-.neg { color:#ff7b7b; font-weight:600; }
-.explain { background:#071022; padding:12px; border-radius:8px; color:#dbeafe; }
+.pos { color:#228c37; font-weight:600; }
+.neg { color:#e02323; font-weight:600; }
+.explain { background:#f7f7fc; padding:12px; border-radius:8px; color:#232b3b; }
+
+/* Tabs */
+div[role="tablist"] > div { background: #fff !important; }
 </style>
 <div class="app-header">
   <div class="title">🛡️ Job Scam Detector</div>
@@ -94,7 +100,6 @@ def extract_text_from_url(url: str, headers=None) -> Tuple[str, BeautifulSoup]:
         for s in soup(["script", "style", "noscript", "svg"]):
             s.decompose()
         visible_text = soup.get_text(separator="\n")
-        # Collapse whitespace
         visible_text = re.sub(r'\n\s*\n+', "\n\n", visible_text)
         return visible_text, soup
     except Exception as e:
@@ -104,11 +109,9 @@ def extract_emails(text: str) -> List[str]:
     return list({m.group(0).lower() for m in EMAIL_REGEX.finditer(text)})
 
 def extract_phones(text: str) -> List[str]:
-    # Use phonenumbers for parsing; fallback to regex
     phones = set()
     for m in PHONE_REGEX.finditer(text):
         phones.add(re.sub(r'\s+', '', m.group(0)))
-    # Use phonenumbers parsing if available
     try:
         for match in phonenumbers.PhoneNumberMatcher(text, None):
             phones.add(phonenumbers.format_number(match.number, phonenumbers.PhoneNumberFormat.E164))
@@ -125,9 +128,6 @@ def extract_links_from_soup(soup: BeautifulSoup) -> List[str]:
     return links
 
 def domain_info(domain: str) -> Dict:
-    """
-    Basic domain checks: https scheme, domain length, suspicious TLDs, presence of hyphens, whois age if possible.
-    """
     info = {"domain": domain, "https": None, "length": len(domain), "has_hyphen": "-" in domain, "tld": "", "whois_age_days": None}
     try:
         parsed = tldextract.extract(domain)
@@ -135,10 +135,8 @@ def domain_info(domain: str) -> Dict:
     except Exception:
         info["tld"] = ""
     try:
-        # Try a whois lookup (may fail or be slow)
         if whois:
             w = whois.whois(domain)
-            # w.creation_date can be a list or datetime
             cd = w.creation_date
             if isinstance(cd, list) and cd:
                 cd = cd[0]
@@ -150,10 +148,6 @@ def domain_info(domain: str) -> Dict:
     return info
 
 def score_text_and_url(text: str, url: str=None, soup: BeautifulSoup=None) -> Dict:
-    """
-    Rule-based scoring: produce a score 0-100 where lower is more suspicious.
-    Returns dict with score, reasons, flagged words, positives, negatives.
-    """
     reasons = []
     positives = []
     negatives = []
@@ -162,7 +156,7 @@ def score_text_and_url(text: str, url: str=None, soup: BeautifulSoup=None) -> Di
 
     text_lower = text.lower()
 
-    # 1) Suspicious phrases
+    # --- 1: Suspicious
     s_count = 0
     for phrase in SUSPICIOUS_PHRASES:
         if phrase in text_lower:
@@ -174,7 +168,6 @@ def score_text_and_url(text: str, url: str=None, soup: BeautifulSoup=None) -> Di
         negatives.append(f"Found suspicious phrases ({s_count}) like: {', '.join(flagged_words[:6])}")
         reasons.append(f"-{deduct} for suspicious phrases")
 
-    # 2) Vague phrases (marketing speak) - penalize but less
     v_count = 0
     for phrase in VAGUE_PHRASES:
         if phrase in text_lower:
@@ -185,7 +178,6 @@ def score_text_and_url(text: str, url: str=None, soup: BeautifulSoup=None) -> Di
         negatives.append(f"Vague/marketing phrases ({v_count}) found.")
         reasons.append(f"-{deduct} for vague language")
 
-    # 3) Payment requests
     pay_count = 0
     for phrase in ["pay", "fee", "training fee", "certificate fee", "transfer money", "send money"]:
         if phrase in text_lower:
@@ -196,18 +188,15 @@ def score_text_and_url(text: str, url: str=None, soup: BeautifulSoup=None) -> Di
         negatives.append("Text includes payment or fee requests for the applicant.")
         reasons.append(f"-{deduct} for payment-related language")
 
-    # 4) Request for sensitive personal info
     for s in ["bank account", "account number", "ssn", "social security number", "passport number", "aadhar"]:
         if s in text_lower:
             score -= 25
             negatives.append(f"Requests sensitive personal information like '{s}'.")
             reasons.append("-25 for requesting sensitive data")
 
-    # 5) Contact method checks: email vs portal
     emails = extract_emails(text)
     phones = extract_phones(text)
     if emails:
-        # suspicious if use personal/free providers rather than corporate domain
         suspicious_email_count = 0
         for e in emails:
             domain = e.split("@")[-1]
@@ -224,20 +213,17 @@ def score_text_and_url(text: str, url: str=None, soup: BeautifulSoup=None) -> Di
         negatives.append("No contact email found in posting (or maybe image-based text).")
         reasons.append("-5 for missing contact email")
 
-    # 6) Phone checks
     if phones:
         positives.append(f"Phone numbers found: {len(phones)}")
     else:
         negatives.append("No phone number found in text.")
 
-    # 7) URL analysis
+    # --- 2: URL
     if url:
-        # check basic validators
         if validators.url(url):
             parsed = tldextract.extract(url)
             domain = parsed.registered_domain or parsed.domain + "." + parsed.suffix
             info = domain_info(domain)
-            # https
             try:
                 resp = requests.head(url, timeout=8, allow_redirects=True)
                 scheme = resp.url.split(":")[0]
@@ -248,12 +234,9 @@ def score_text_and_url(text: str, url: str=None, soup: BeautifulSoup=None) -> Di
                 else:
                     positives.append("Website uses HTTPS.")
             except Exception:
-                # Can't reach: penalize
                 score -= 10
                 negatives.append("Could not reach the website to verify HTTPS (network/unavailable).")
                 reasons.append("-10 for unreachable site")
-
-            # domain age
             if info.get("whois_age_days") is not None:
                 age_years = info["whois_age_days"] / 365.0
                 if age_years < 0.5:
@@ -267,10 +250,7 @@ def score_text_and_url(text: str, url: str=None, soup: BeautifulSoup=None) -> Di
                 else:
                     positives.append(f"Domain registered for {age_years:.1f} years.")
             else:
-                # unknown whois
                 reasons.append("-0 whois unknown")
-
-            # hyphen / long name / suspicious TLDs
             if info.get("has_hyphen"):
                 score -= 6
                 negatives.append("Domain contains hyphens (common in spoof domains).")
@@ -283,14 +263,12 @@ def score_text_and_url(text: str, url: str=None, soup: BeautifulSoup=None) -> Di
                 score -= 6
                 negatives.append(f"Uncommon/suspicious TLD detected ({info.get('tld')}).")
                 reasons.append("-6 for suspicious TLD")
-            # check presence of login/apply form
             if soup:
                 forms = soup.find_all("form")
                 if not forms:
                     reasons.append("-2 no forms detected for application (could mean only email apply).")
                 else:
                     positives.append(f"Site has {len(forms)} form(s) (application/interaction possible).")
-            # gather links on page and see relative amounts
             if soup:
                 links = extract_links_from_soup(soup)
                 external_links = [l for l in links if validators.url(l) and tldextract.extract(l).registered_domain != domain]
@@ -303,8 +281,6 @@ def score_text_and_url(text: str, url: str=None, soup: BeautifulSoup=None) -> Di
             negatives.append("Provided URL is not valid.")
             reasons.append("-20 for invalid URL")
 
-    # 8) Job details - missing role/skills/seniority
-    # Reward if job listing has role, responsibilities, required skills
     required_keywords = ["responsibilit", "requirement", "qualification", "skills", "experience", "role", "position"]
     req_found = sum(1 for k in required_keywords if k in text_lower)
     if req_found < 2:
@@ -314,23 +290,19 @@ def score_text_and_url(text: str, url: str=None, soup: BeautifulSoup=None) -> Di
     else:
         positives.append("Clear job responsibilities / skills described.")
 
-    # 9) Salary mention - extremely high unspecified salary is suspicious, but missing salary isn't decisive
     salary_matches = re.findall(r'₹[\d,]+|rs\.\s*\d+|\$\s?\d+|\band salary\b|\bCTC\b', text, flags=re.IGNORECASE)
     if salary_matches:
         positives.append("Salary / CTC mentioned.")
     else:
         reasons.append("-3 salary not explicitly mentioned")
 
-    # 10) Urgent/pressure language
     urgent_count = sum(1 for p in ["urgent hiring", "apply now", "immediate join", "interview today", "walkin interview"] if p in text_lower)
     if urgent_count:
         score -= min(12, urgent_count*6)
         negatives.append("Pressure/urgency language used (common in scam posts).")
         reasons.append(f"-{min(12, urgent_count*6)} urgency wording")
 
-    # final normalization
     score = max(0, min(100, score))
-    # produce an overall label
     label = "Likely Legit" if score >= 70 else ("Suspicious" if score >= 40 else "Likely Scam")
 
     return {
@@ -391,7 +363,6 @@ with tab1:
             else:
                 st.success("Text extracted from URL.")
 
-    # User may edit/expose final text to analyze
     st.markdown("#### Final text to analyze (you can edit before analyzing):")
     final_text = st.text_area("Final text", value=extracted_text, height=240)
     analyze_button = st.button("Analyze Listing", key="analyze")
@@ -402,7 +373,6 @@ with tab1:
         else:
             with st.spinner("Analyzing..."):
                 result = score_text_and_url(final_text, provided_url, page_soup)
-            # Result card
             col1, col2 = st.columns([1.2, 1])
             with col1:
                 st.markdown(f"<div class='card'><div style='display:flex; justify-content:space-between; align-items:center;'>"
@@ -427,7 +397,6 @@ with tab1:
                     st.markdown(f"<div class='small'><b>URL analyzed:</b> {provided_url}</div>", unsafe_allow_html=True)
                 st.markdown("</div>", unsafe_allow_html=True)
 
-            # Expandable detailed explain
             with st.expander("See detailed explanation and flagged fragments"):
                 st.markdown("<div class='explain'>", unsafe_allow_html=True)
                 st.markdown("**Verdict summary**")
@@ -457,10 +426,8 @@ with tab2:
 with tab3:
     st.markdown("### Highlights from last analyzed text")
     st.info("This shows the last run's flagged phrases and contact details for quick scanning.")
-    # Keep stateful last result in session_state
     if "last_result" not in st.session_state:
         st.session_state["last_result"] = None
-
     if st.button("Show last result (if any)"):
         st.write(st.session_state.get("last_result"))
     else:
@@ -477,12 +444,10 @@ with tab4:
     st.markdown("---")
     st.markdown("### Development / Integration notes")
     st.markdown("""
-    - This module is built to be integrated into a larger MERN stack platform as described in your SRS. :contentReference[oaicite:1]{index=1}  
+    - This module is built to be integrated into a larger MERN stack platform as described in your SRS.
     - For production, you can add: automated OCR for image PDFs (Tesseract), ML classifiers trained on labeled scam vs legit postings, rate-limited WHOIS + domain reputation API, and integration with external threat intelligence APIs.
     """, unsafe_allow_html=True)
 
-# Save last_result to session state for quick recall
-# If we had a result in local scope, save it
 try:
     if 'result' in locals():
         st.session_state["last_result"] = result
