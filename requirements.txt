@@ -1,0 +1,10 @@
+streamlit
+requests
+beautifulsoup4
+pdfplumber
+tldextract
+validators
+phonenumbers
+scikit-learn
+python-whois
+python-magic-bin
